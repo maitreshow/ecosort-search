@@ -1,0 +1,23 @@
+# --- Environnements Python ---
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# --- Dataset Kaggle (jamais versionné, trop lourd) ---
+data/*
+!data/.gitkeep
+
+# --- Fichiers d'environnement / secrets ---
+.env
+*.log
+
+# --- OS / IDE ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- Notebooks checkpoints ---
+.ipynb_checkpoints/

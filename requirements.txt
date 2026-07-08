@@ -1,0 +1,15 @@
+# --- Interface web ---
+streamlit==1.38.0
+
+# --- Deep Learning ---
+tensorflow==2.16.1
+numpy==1.26.4
+pillow==10.4.0
+
+# --- Scraping ---
+requests==2.32.3
+beautifulsoup4==4.12.3
+# selenium==4.23.1        # décommenter si Jumia nécessite du JS rendering
+
+# --- Utilitaires ---
+python-dotenv==1.0.1
