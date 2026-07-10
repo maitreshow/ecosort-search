@@ -1,0 +1,22 @@
+# Environnements Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Dataset (tres lourd, pas necessaire pour faire tourner l'app,
+# seul le modele deja entraine model/modele_eco_sort.h5 est utilise)
+data/
+
+# Git
+.git/
+.gitignore
+
+# Fichiers Kaggle / secrets
+kaggle.json
+
+# Divers
+notebooks/
+*.md
+.DS_Store
+projet_ISE2.md
