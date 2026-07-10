@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------------------------
 # 1. CONFIGURATION
 # ---------------------------------------------------------------------------
-DATA_DIR = "data/Garbage classification/Garbage classification"
+DATA_DIR = "data/merged_dataset"
 IMG_SIZE = (224, 224)          # taille standard attendue par MobileNetV2
 BATCH_SIZE = 32
 EPOCHS_HEAD = 10                # entrainement de la "tete" (couches ajoutees)
