@@ -47,6 +47,31 @@ CATEGORY_MAPPING = {
     "trash": "MARRON",
 }
 
+# Mots-cles indiquant qu'un produit est reellement electronique.
+# Utilise comme garde-fou : si le modele predit "electronic" sans etre tres
+# confiant ET qu'aucun de ces mots n'apparait dans le nom du produit,
+# on ne fait pas confiance a cette prediction (biais connu du modele,
+# qui associe parfois a tort "fond uni / couleur unie" a "electronic").
+ELECTRONIC_KEYWORDS = [
+    "smartphone", "telephone", "téléphone", "phone", "chargeur", "ecouteur",
+    "écouteur", "casque", "mixeur", "montre", "watch", "tablette", "tablet",
+    "ordinateur", "laptop", "pc", "clavier", "souris", "imprimante",
+    "television", "télévision", "tv", "radio", "camera", "caméra",
+    "batterie", "pile", "cable", "câble", "adaptateur", "haut-parleur",
+    "enceinte", "micro-ondes", "refrigerateur", "réfrigérateur",
+    "climatiseur", "ventilateur", "rasoir", "seche-cheveux", "fer a repasser",
+]
+
+# Seuil de confiance en dessous duquel on se mefie d'une prediction "electronic"
+ELECTRONIC_CONFIDENCE_THRESHOLD = 0.80
+
+
+def is_likely_electronic_by_name(product_name: str) -> bool:
+    """Verifie si le nom du produit contient un mot-cle electronique evident."""
+    name_lower = product_name.lower()
+    return any(keyword in name_lower for keyword in ELECTRONIC_KEYWORDS)
+
+
 # Couleurs et infos d'affichage par categorie officielle
 CATEGORY_INFO = {
     "JAUNE": {
@@ -93,18 +118,48 @@ def load_model():
 
 
 def predict_category(image: Image.Image, model, class_names):
-    """Predit la classe d'une image PIL et retourne (classe, confiance)."""
+    """
+    Predit la classe d'une image PIL.
+    Retourne une liste de (classe, confiance) triee par confiance decroissante,
+    pour permettre un garde-fou (ex: se rabattre sur le 2e choix si besoin).
+    """
     img = image.convert("RGB").resize(IMG_SIZE)
     img_array = np.array(img)
     img_array = preprocess_input(img_array)
     img_array = np.expand_dims(img_array, axis=0)
 
     predictions = model.predict(img_array, verbose=0)[0]
-    predicted_idx = np.argmax(predictions)
-    predicted_class = class_names[predicted_idx]
-    confidence = float(predictions[predicted_idx])
 
-    return predicted_class, confidence
+    ranked = sorted(
+        zip(class_names, predictions.tolist()),
+        key=lambda x: x[1],
+        reverse=True,
+    )
+    return ranked  # ex: [("electronic", 0.62), ("plastic", 0.25), ...]
+
+
+def apply_electronic_guard(ranked_predictions, product_name: str):
+    """
+    Garde-fou : si la meilleure prediction est 'electronic' avec une confiance
+    moyenne (pas tres sure) ET qu'aucun mot-cle electronique n'apparait dans
+    le nom du produit, on se rabat sur la 2e meilleure prediction.
+
+    Corrige un biais connu du modele qui associe parfois a tort les objets
+    a couleur unie / fond neutre a la classe "electronic".
+    """
+    best_class, best_confidence = ranked_predictions[0]
+
+    if (
+        best_class == "electronic"
+        and best_confidence < ELECTRONIC_CONFIDENCE_THRESHOLD
+        and not is_likely_electronic_by_name(product_name)
+        and len(ranked_predictions) > 1
+    ):
+        # On se rabat sur le 2e choix, et on garde une trace pour l'affichage
+        second_class, second_confidence = ranked_predictions[1]
+        return second_class, second_confidence, True  # True = garde-fou active
+
+    return best_class, best_confidence, False
 
 
 def download_image(url: str) -> Image.Image | None:
@@ -148,7 +203,7 @@ if st.session_state.search_results:
     for i, produit in enumerate(st.session_state.search_results):
         with cols[i]:
             if produit["image_url"]:
-                st.image(produit["image_url"], width="stretch")
+                st.image(produit["image_url"], use_container_width=True)
             st.caption(produit["nom"][:60])
             st.caption(produit["prix"])
             if st.button("Choisir", key=f"select_{i}"):
@@ -169,7 +224,10 @@ if st.session_state.selected_result:
         image = download_image(produit["image_url"])
 
         if image:
-            predicted_class, confidence = predict_category(image, model, class_names)
+            ranked_predictions = predict_category(image, model, class_names)
+            predicted_class, confidence, guard_triggered = apply_electronic_guard(
+                ranked_predictions, produit["nom"]
+            )
             categorie = CATEGORY_MAPPING.get(predicted_class, "MARRON")
             info = CATEGORY_INFO[categorie]
 
@@ -193,5 +251,16 @@ if st.session_state.selected_result:
 
             st.markdown(f"**Matiere detectee :** {predicted_class} ({confidence*100:.1f}% de confiance)")
             st.markdown(f"**Consigne :** {info['description']}")
+
+            if guard_triggered:
+                st.caption(
+                    "ℹ️ Le modele hesitait avec 'electronic' (confiance moyenne, "
+                    "pas de mot-cle electronique dans le nom du produit) : "
+                    "la 2e prediction la plus probable a ete retenue."
+                )
+
+            with st.expander("Voir le detail des probabilites par classe"):
+                for cls, conf in ranked_predictions:
+                    st.write(f"- {cls} : {conf*100:.1f}%")
 
             st.image(image, caption=produit["nom"], width=200)
