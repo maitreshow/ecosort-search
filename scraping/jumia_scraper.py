@@ -9,19 +9,49 @@ Usage (test rapide) :
     python scraping/jumia_scraper.py
 """
 
+import time
 import requests
 from bs4 import BeautifulSoup
 
 BASE_URL = "https://www.jumia.ci"
 SEARCH_URL = f"{BASE_URL}/catalog/"
 
+# En-tetes complets pour ressembler a un vrai navigateur (Jumia bloque
+# les requetes trop "robotiques" avec des en-tetes minimalistes)
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "fr-FR,fr;q=0.9",
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,*/*;q=0.8"
+    ),
+    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
 }
+
+# On utilise une Session : elle garde les cookies entre les requetes,
+# comme le ferait un vrai navigateur (visite la page d'accueil d'abord,
+# puis la recherche, plutot qu'une requete "hors sol")
+_session = requests.Session()
+_session.headers.update(HEADERS)
+
+
+def _warm_up_session():
+    """Visite la page d'accueil pour recuperer des cookies valides avant de scraper."""
+    try:
+        _session.get(BASE_URL, timeout=10)
+        time.sleep(1)  # petite pause, comportement plus humain
+    except requests.RequestException:
+        pass  # si ca echoue, on tente quand meme la recherche directement
 
 
 def search_jumia(keyword: str, max_results: int = 5) -> list[dict]:
@@ -31,13 +61,19 @@ def search_jumia(keyword: str, max_results: int = 5) -> list[dict]:
     """
     params = {"q": keyword}
 
+    _warm_up_session()
+
     try:
-        response = requests.get(
-            SEARCH_URL, params=params, headers=HEADERS, timeout=10
-        )
+        response = _session.get(SEARCH_URL, params=params, timeout=10)
         response.raise_for_status()
     except requests.RequestException as e:
         print(f"[ERREUR] Impossible de contacter Jumia : {e}")
+        if "403" in str(e):
+            print(
+                "[INFO] Jumia bloque la requete (403). Cela peut etre temporaire "
+                "(protection anti-bot). Attendez quelques minutes avant de "
+                "reessayer, ou changez de reseau si le blocage persiste."
+            )
         return []
 
     soup = BeautifulSoup(response.text, "lxml")
