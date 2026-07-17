@@ -10,6 +10,7 @@ Usage (test rapide) :
 """
 
 import time
+import random
 import requests
 from bs4 import BeautifulSoup
 
@@ -53,33 +54,28 @@ def _warm_up_session():
     except requests.RequestException:
         pass  # si ca echoue, on tente quand meme la recherche directement
 
-
-def search_jumia(keyword: str, max_results: int = 5) -> list[dict]:
+def search_jumia(keyword: str, max_results: int = 5, max_retries: int = 3) -> list[dict]:
     """
     Recherche des produits sur Jumia CI a partir d'un mot-cle.
-    Retourne une liste de dicts avec : nom, prix, image_url, lien
+    Reessaie automatiquement en cas de blocage temporaire (403).
     """
     params = {"q": keyword}
-
     _warm_up_session()
 
-    try:
-        response = _session.get(SEARCH_URL, params=params, timeout=10)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        print(f"[ERREUR] Impossible de contacter Jumia : {e}")
-        if "403" in str(e):
-            print(
-                "[INFO] Jumia bloque la requete (403). Cela peut etre temporaire "
-                "(protection anti-bot). Attendez quelques minutes avant de "
-                "reessayer, ou changez de reseau si le blocage persiste."
-            )
-        return []
+    for tentative in range(1, max_retries + 1):
+        try:
+            response = _session.get(SEARCH_URL, params=params, timeout=10)
+            response.raise_for_status()
+            break  # succes, on sort de la boucle
+        except requests.RequestException as e:
+            print(f"[TENTATIVE {tentative}/{max_retries}] Echec : {e}")
+            if tentative == max_retries:
+                print("[ERREUR] Abandon apres plusieurs tentatives.")
+                return []
+            attente = tentative * 2 + random.uniform(0, 1)
+            time.sleep(attente)
 
     soup = BeautifulSoup(response.text, "lxml")
-
-    # Structure habituelle des sites Jumia : chaque produit est dans
-    # une balise <article class="prd _fb col c-prd">
     articles = soup.select("article.prd")
 
     if not articles:
@@ -92,31 +88,23 @@ def search_jumia(keyword: str, max_results: int = 5) -> list[dict]:
         try:
             link_tag = article.select_one("a.core")
             lien = BASE_URL + link_tag["href"] if link_tag else None
-
             nom_tag = article.select_one("h3.name")
             nom = nom_tag.get_text(strip=True) if nom_tag else "Nom inconnu"
-
             prix_tag = article.select_one("div.prc")
             prix = prix_tag.get_text(strip=True) if prix_tag else "Prix inconnu"
-
             img_tag = article.select_one("img.img")
             image_url = None
             if img_tag:
-                # Jumia utilise souvent data-src pour le lazy loading
                 image_url = img_tag.get("data-src") or img_tag.get("src")
-
             results.append({
-                "nom": nom,
-                "prix": prix,
-                "image_url": image_url,
-                "lien": lien,
+                "nom": nom, "prix": prix,
+                "image_url": image_url, "lien": lien,
             })
         except Exception as e:
             print(f"[AVERTISSEMENT] Erreur sur un produit : {e}")
             continue
 
     return results
-
 
 if __name__ == "__main__":
     # Test rapide en ligne de commande
