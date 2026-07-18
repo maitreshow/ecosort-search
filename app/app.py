@@ -176,10 +176,121 @@ def download_image(url: str) -> Image.Image | None:
 # ---------------------------------------------------------------------------
 # INTERFACE STREAMLIT
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="EcoSort-Search", page_icon="♻️", layout="centered")
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
 
-st.title("♻️ EcoSort-Search")
-st.markdown("Recherchez un produit, l'IA vous dira dans quelle poubelle le jeter.")
+st.set_page_config(
+    page_title="EcoSort-Search",
+    page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "♻️",
+    layout="centered",
+)
+
+# --- CSS personnalise : police, couleurs de marque, cartes produits ---
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Poppins', sans-serif;
+    }
+
+    /* Bandeau d'en-tete */
+    .ecosort-header {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 10px 0 20px 0;
+    }
+    .ecosort-header h1 {
+        font-weight: 700;
+        font-size: 2.1rem;
+        margin: 0;
+        background: linear-gradient(90deg, #1B5E20, #43A047);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .ecosort-header p {
+        margin: 2px 0 0 0;
+        color: #6b7280;
+        font-size: 0.95rem;
+    }
+
+    /* Carte produit */
+    .product-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 12px;
+        text-align: center;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .product-card:hover {
+        box-shadow: 0 6px 16px rgba(27,94,32,0.15);
+        transform: translateY(-3px);
+    }
+    .product-name {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #1f2937;
+        min-height: 40px;
+        margin-top: 6px;
+    }
+    .product-price {
+        color: #2E7D32;
+        font-weight: 700;
+        font-size: 0.9rem;
+        margin-bottom: 8px;
+    }
+
+    /* Boutons Streamlit */
+    div.stButton > button {
+        background-color: #2E7D32;
+        color: white;
+        border-radius: 8px;
+        border: none;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+        transition: background-color 0.2s ease;
+    }
+    div.stButton > button:hover {
+        background-color: #1B5E20;
+        color: white;
+    }
+
+    /* Bandeau resultat colore : coins arrondis + ombre douce */
+    .result-banner {
+        padding: 36px;
+        border-radius: 18px;
+        text-align: center;
+        color: white;
+        font-size: 1.5rem;
+        font-weight: 700;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        margin-bottom: 14px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# --- En-tete avec logo ---
+header_cols = st.columns([1, 6])
+with header_cols[0]:
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=70)
+with header_cols[1]:
+    st.markdown(
+        """
+        <div class="ecosort-header">
+            <div>
+                <h1>EcoSort-Search</h1>
+                <p>Recherchez un produit, l'IA vous dira dans quelle poubelle le jeter ♻️</p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # Initialisation de l'etat de session (pour garder les resultats entre les clics)
 if "search_results" not in st.session_state:
@@ -188,35 +299,47 @@ if "selected_result" not in st.session_state:
     st.session_state.selected_result = None
 
 # --- Barre de recherche ---
-keyword = st.text_input("Nom du produit (ex : bouteille shampoing, smartphone, journal...)")
+keyword = st.text_input(
+    "Nom du produit",
+    placeholder="ex : bouteille shampoing, smartphone, journal...",
+    label_visibility="collapsed",
+)
 
-if st.button("🔍 Rechercher sur Jumia") and keyword:
+if st.button("🔍  Rechercher sur Jumia") and keyword:
     with st.spinner("Recherche en cours sur Jumia..."):
         st.session_state.search_results = search_jumia(keyword, max_results=5)
         st.session_state.selected_result = None
 
 # --- Affichage des resultats ---
 if st.session_state.search_results:
-    st.subheader("Resultats trouves")
+    st.markdown("#### Résultats trouvés")
 
     cols = st.columns(len(st.session_state.search_results))
     for i, produit in enumerate(st.session_state.search_results):
         with cols[i]:
+            st.markdown('<div class="product-card">', unsafe_allow_html=True)
             if produit["image_url"]:
-                st.image(produit["image_url"], use_container_width=True)
-            st.caption(produit["nom"][:60])
-            st.caption(produit["prix"])
+                st.image(produit["image_url"], width="stretch")
+            st.markdown(
+                f'<div class="product-name">{produit["nom"][:55]}</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f'<div class="product-price">{produit["prix"]}</div>',
+                unsafe_allow_html=True,
+            )
             if st.button("Choisir", key=f"select_{i}"):
                 st.session_state.selected_result = produit
+            st.markdown("</div>", unsafe_allow_html=True)
 
 elif keyword and st.session_state.search_results == []:
-    st.warning("Aucun produit trouve. Essayez un autre mot-cle.")
+    st.warning("Aucun produit trouvé. Essayez un autre mot-clé.")
 
 # --- Prediction sur le produit selectionne ---
 if st.session_state.selected_result:
     produit = st.session_state.selected_result
     st.divider()
-    st.subheader(f"Analyse de : {produit['nom']}")
+    st.markdown(f"#### Analyse de : {produit['nom']}")
 
     model, class_names = load_model()
 
@@ -234,33 +357,28 @@ if st.session_state.selected_result:
             # Affichage colore du resultat
             st.markdown(
                 f"""
-                <div style="
-                    background-color: {info['couleur']};
-                    padding: 40px;
-                    border-radius: 15px;
-                    text-align: center;
-                    color: white;
-                    font-size: 24px;
-                    font-weight: bold;
-                ">
+                <div class="result-banner" style="background-color: {info['couleur']};">
                     {info['emoji']} {info['nom']}
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-            st.markdown(f"**Matiere detectee :** {predicted_class} ({confidence*100:.1f}% de confiance)")
-            st.markdown(f"**Consigne :** {info['description']}")
+            result_cols = st.columns([1, 2])
+            with result_cols[0]:
+                st.image(image, width="stretch")
+            with result_cols[1]:
+                st.markdown(f"**Matière détectée :** {predicted_class}")
+                st.markdown(f"**Confiance :** {confidence*100:.1f}%")
+                st.markdown(f"**Consigne :** {info['description']}")
 
-            if guard_triggered:
-                st.caption(
-                    "ℹ️ Le modele hesitait avec 'electronic' (confiance moyenne, "
-                    "pas de mot-cle electronique dans le nom du produit) : "
-                    "la 2e prediction la plus probable a ete retenue."
-                )
+                if guard_triggered:
+                    st.caption(
+                        "ℹ️ Le modèle hésitait avec 'electronic' (confiance moyenne, "
+                        "pas de mot-clé électronique dans le nom du produit) : "
+                        "la 2e prédiction la plus probable a été retenue."
+                    )
 
-            with st.expander("Voir le detail des probabilites par classe"):
+            with st.expander("Voir le détail des probabilités par classe"):
                 for cls, conf in ranked_predictions:
-                    st.write(f"- {cls} : {conf*100:.1f}%")
-
-            st.image(image, caption=produit["nom"], width=200)
+                    st.progress(conf, text=f"{cls} — {conf*100:.1f}%")
