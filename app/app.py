@@ -181,7 +181,7 @@ LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
 st.set_page_config(
     page_title="EcoSort-Search",
     page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "♻️",
-    layout="centered",
+    layout="wide",
 )
 
 # --- CSS personnalise : police, couleurs de marque, cartes produits ---
@@ -192,6 +192,12 @@ st.markdown(
 
     html, body, [class*="css"] {
         font-family: 'Poppins', sans-serif;
+    }
+
+    /* Contenu centre et limite en largeur, meme en layout="wide" */
+    .block-container {
+        max-width: 900px;
+        padding-top: 2rem;
     }
 
     /* Bandeau d'en-tete */
@@ -215,19 +221,44 @@ st.markdown(
         font-size: 0.95rem;
     }
 
-    /* Carte produit */
-    .product-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 14px;
-        padding: 12px;
+    /* Grille de produits responsive : les cartes passent a la ligne
+       automatiquement sur petit ecran au lieu de s'ecraser. */
+    .st-key-product_grid [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap;
+        row-gap: 18px;
+    }
+    .st-key-product_grid [data-testid="column"] {
+        flex: 1 1 170px;
+        min-width: 160px;
+    }
+
+    /* Carte produit (st.container(key=f"card_{i}", border=True)) */
+    .st-key-product_grid div[class*="st-key-card_"] {
+        position: relative;
         text-align: center;
-        transition: box-shadow 0.2s ease, transform 0.2s ease;
+        border-radius: 14px !important;
+        transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
         box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
-    .product-card:hover {
+    .st-key-product_grid div[class*="st-key-card_"]:hover {
         box-shadow: 0 6px 16px rgba(27,94,32,0.15);
         transform: translateY(-3px);
+    }
+    .st-key-product_grid div[class*="_selected"] {
+        border: 2px solid #2E7D32 !important;
+        box-shadow: 0 6px 18px rgba(46,125,50,0.25);
+    }
+    .selected-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #2E7D32;
+        color: white;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 999px;
+        margin-bottom: 8px;
     }
     .product-name {
         font-size: 0.82rem;
@@ -251,23 +282,99 @@ st.markdown(
         border: none;
         font-weight: 600;
         padding: 0.5rem 1rem;
+        width: 100%;
         transition: background-color 0.2s ease;
     }
     div.stButton > button:hover {
         background-color: #1B5E20;
         color: white;
     }
+    div.stButton > button:disabled {
+        background-color: #DCEDC8;
+        color: #2E7D32;
+        opacity: 1;
+    }
 
     /* Bandeau resultat colore : coins arrondis + ombre douce */
     .result-banner {
-        padding: 36px;
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        padding: 28px 32px;
         border-radius: 18px;
-        text-align: center;
         color: white;
-        font-size: 1.5rem;
-        font-weight: 700;
         box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-        margin-bottom: 14px;
+        margin-bottom: 18px;
+    }
+    .result-icon {
+        font-size: 2.8rem;
+        line-height: 1;
+    }
+    .result-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        margin: 0;
+    }
+    .result-subtitle {
+        font-size: 0.92rem;
+        font-weight: 400;
+        opacity: 0.92;
+        margin-top: 4px;
+    }
+
+    /* Lignes d'info (matiere / confiance / consigne) */
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #eef0f2;
+        font-size: 0.92rem;
+    }
+    .info-row:last-child {
+        border-bottom: none;
+    }
+    .info-label {
+        color: #6b7280;
+        font-weight: 500;
+    }
+    .info-value {
+        color: #1f2937;
+        font-weight: 600;
+        text-align: right;
+    }
+
+    /* Etat vide (aucun resultat) */
+    .empty-state {
+        text-align: center;
+        padding: 34px 20px;
+        border: 1px dashed #d1d5db;
+        border-radius: 14px;
+        color: #6b7280;
+        background: #fafafa;
+    }
+    .empty-state-icon {
+        font-size: 2.2rem;
+        margin-bottom: 8px;
+    }
+
+    /* Legende des categories affichee avant toute recherche */
+    .legend-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 6px;
+    }
+    .legend-chip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1 1 200px;
+        padding: 10px 14px;
+        border-radius: 12px;
+        color: white;
+        font-size: 0.85rem;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     </style>
     """,
@@ -306,7 +413,7 @@ keyword = st.text_input(
 )
 
 if st.button("🔍  Rechercher sur Jumia") and keyword:
-    with st.spinner("Recherche en cours sur Jumia..."):
+    with st.spinner(f"Recherche de « {keyword} » sur Jumia..."):
         st.session_state.search_results = search_jumia(keyword, max_results=5)
         st.session_state.selected_result = None
 
@@ -314,26 +421,56 @@ if st.button("🔍  Rechercher sur Jumia") and keyword:
 if st.session_state.search_results:
     st.markdown("#### Résultats trouvés")
 
-    cols = st.columns(len(st.session_state.search_results))
-    for i, produit in enumerate(st.session_state.search_results):
-        with cols[i]:
-            st.markdown('<div class="product-card">', unsafe_allow_html=True)
-            if produit["image_url"]:
-                st.image(produit["image_url"], width="stretch")
-            st.markdown(
-                f'<div class="product-name">{produit["nom"][:55]}</div>',
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                f'<div class="product-price">{produit["prix"]}</div>',
-                unsafe_allow_html=True,
-            )
-            if st.button("Choisir", key=f"select_{i}"):
-                st.session_state.selected_result = produit
-            st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(key="product_grid"):
+        cols = st.columns(len(st.session_state.search_results))
+        for i, produit in enumerate(st.session_state.search_results):
+            with cols[i]:
+                is_selected = st.session_state.selected_result == produit
+                card_key = f"card_{i}_selected" if is_selected else f"card_{i}"
+                with st.container(key=card_key, border=True):
+                    if is_selected:
+                        st.markdown('<div class="selected-badge">✓ Sélectionné</div>', unsafe_allow_html=True)
+                    if produit["image_url"]:
+                        st.image(produit["image_url"], width="stretch")
+                    st.markdown(
+                        f'<div class="product-name">{produit["nom"][:55]}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f'<div class="product-price">{produit["prix"]}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(
+                        "✓ Sélectionné" if is_selected else "Choisir",
+                        key=f"select_{i}",
+                        disabled=is_selected,
+                    ):
+                        st.session_state.selected_result = produit
+                        st.rerun()
 
 elif keyword and st.session_state.search_results == []:
-    st.warning("Aucun produit trouvé. Essayez un autre mot-clé.")
+    st.markdown(
+        f"""
+        <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            Aucun produit trouvé pour « <strong>{keyword}</strong> ».<br>Essayez un autre mot-clé.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+elif not st.session_state.search_results:
+    st.markdown("##### 🗂️ Légende des consignes de tri")
+    st.markdown(
+        '<div class="legend-grid">'
+        + "".join(
+            f'<div class="legend-chip" style="background-color: {c["couleur"]};">'
+            f'{c["emoji"]} {c["nom"]}</div>'
+            for c in CATEGORY_INFO.values()
+        )
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
 # --- Prediction sur le produit selectionne ---
 if st.session_state.selected_result:
@@ -343,7 +480,7 @@ if st.session_state.selected_result:
 
     model, class_names = load_model()
 
-    with st.spinner("Analyse de l'image en cours..."):
+    with st.spinner("🧠 L'IA analyse l'image..."):
         image = download_image(produit["image_url"])
 
         if image:
@@ -358,7 +495,11 @@ if st.session_state.selected_result:
             st.markdown(
                 f"""
                 <div class="result-banner" style="background-color: {info['couleur']};">
-                    {info['emoji']} {info['nom']}
+                    <div class="result-icon">{info['emoji']}</div>
+                    <div>
+                        <div class="result-title">{info['nom']}</div>
+                        <div class="result-subtitle">{info['description']}</div>
+                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -368,9 +509,14 @@ if st.session_state.selected_result:
             with result_cols[0]:
                 st.image(image, width="stretch")
             with result_cols[1]:
-                st.markdown(f"**Matière détectée :** {predicted_class}")
-                st.markdown(f"**Confiance :** {confidence*100:.1f}%")
-                st.markdown(f"**Consigne :** {info['description']}")
+                st.markdown(
+                    f"""
+                    <div class="info-row"><span class="info-label">Matière détectée</span><span class="info-value">{predicted_class}</span></div>
+                    <div class="info-row"><span class="info-label">Confiance</span><span class="info-value">{confidence*100:.1f}%</span></div>
+                    <div class="info-row"><span class="info-label">Consigne</span><span class="info-value">{info['description']}</span></div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
                 if guard_triggered:
                     st.caption(
